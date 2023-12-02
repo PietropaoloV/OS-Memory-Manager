@@ -102,7 +102,7 @@ void print_init_memory (){
 //Creates Swap File
 void fileCreation()
 {
-	int Fd = open("swapfile.txt", O_RDWR | O_TRUNC | O_CREAT);
+	int Fd = open("swapfile.txt", O_RDWR | O_CREAT | O_TRUNC, 0666);
 	off_t offset = lseek(Fd,(off_t)16777216, SEEK_SET);
 
 	;
@@ -532,37 +532,40 @@ int memAllignPages() //Function to call when there is a page fault
  */
 int give_new_page(){
 	printf("in give_new_page() function\n");
-	/*
 	membook* ptr = page_table;
 	//void* page1;
 	//void* page2;
 	int page_count = 1;
 
 	// find last owned contiguous page by current thread
+	// Do we need to do this, pages can be assigned randomly
 	while(ptr->TID == Master->tid){
 		ptr = ptr->next;
 	}
 
+	membook* ptrFinder = ptr;
 	// CASE 1: Free page is in memory - let's find out!!!
-	while(ptr != NULL){
-		if(ptr->isFree == 1){
-
+	while(ptrFinder != NULL){
+		if(ptrFinder->isFree == 1){
+			// Do something?
+			break;
 		}
-		ptr = ptr->next;
+		ptrFinder = ptrFinder->next;
 		page_count++;
 	}
 
 
 	// Thread owns a page - need to traverse to last owned
+	// ptr tid is always -1 here and Master->tid is 1
 	if(ptr->TID == Master->tid){
 		while(ptr->TID == Master->tid){
 			ptr = ptr->next;
 		}
-	}*/
+	}
 	printf("Returning from give_new_page() function\n\n");
+	// A bit confused on how are we returning the page address
 	return -1;
 }
-
 
 /* Function that assumes the current thread owns a page in the front of memory and tries to alocate space in the page for the thread
 
@@ -583,9 +586,9 @@ void* give_allocation(size_t size){
 	}
 	printf("used page size: %d\n", curr_page_size);
 	if((curr_page_size + size + sizeof(block)) >= PAGE_SIZE){
-		printf("the thread has exceeded a page size, and needs a new page to be allocated contiguously\nEntering give_new_page() function\n\n");
+		printf("the thread has exceeded a page size, and needs a new page to be allocated contiguously\nEntering give_new_page2() function\n\n");
 			// need to give page 
-		int new_page_ret_val = give_new_page();
+		int new_page_ret_val = give_new_page2();
 		if(new_page_ret_val == -1){
 				// CASE 4 - no new page available
 			printf("no page was available to give, returning NULL\n\n");
@@ -615,9 +618,9 @@ void* give_allocation(size_t size){
    - Traverse metadata blocks until you find an open block and give block to user
 
   CASE 3: Memallign returns -1 and the thread doesn't own any pages
-   - Find a free page (call give_new_page function)
+   - Find a free page (call give_new_page2 function)
 
-  CASE 4: give_new_page function returns -1 and can't find a page
+  CASE 4: give_new_page2 function returns -1 and can't find a page
   	- Return NULL - no pages are available 
 
   CASE 5: thread tries to request space but already has reached the maximum page limit
@@ -641,8 +644,8 @@ void* findSpace(size_t size) {
 
 	// CASE 3 - thread doesn't own any pages
 		if(memAllign_ret_val == -1){
-			printf("memAllignPages determined that the thread does not own any pages, giving new page\nGoing into give_new_page() function\n\n");
-			int new_page_ret_val = give_new_page();
+			printf("memAllignPages determined that the thread does not own any pages, giving new page\nGoing into give_new_page2() function\n\n");
+			int new_page_ret_val = give_new_page2();
 			if(new_page_ret_val == -1){
 			// CASE 4 - no new page available
 				printf("no page was available to give, returning NULL\n\n");
@@ -784,7 +787,7 @@ void* shalloc(size_t size){
  */
 void* myallocate(int size, char FILE[], int LINE) {
 
-	printf("in myallocate()\n");
+	printf("\nin myallocate()\n");
 	//Error if our malloc'd size is either nothing or negative.
 	if (size <= 0) {
 		return NULL;
@@ -802,7 +805,7 @@ void* myallocate(int size, char FILE[], int LINE) {
 
 		first_time = 1;
 
-		printf("memalligning all of memory\n");
+		printf("\nmemalligning all of memory\n");
 		memory = memalign(PAGE_SIZE,2048*PAGE_SIZE);
 		//int x = posix_memalign((void*)&mem,PAGE_SIZE,TOTAL_MEM);
 		if(memory < 0) fatalError(__LINE__, __FILE__);
@@ -825,11 +828,11 @@ void* myallocate(int size, char FILE[], int LINE) {
 	void* metadata = findSpace(size);
 	//printf("find space ret val: %p\n", metadata);
 	// protecting memory
-	printf("mydeallocate() calling protectMem() function\n\n");
+	printf("myallocate() calling protectMem() function\n\n");
 	int i = protectMem();
 	printf("protectMem ret val: %d\n", i);
 
-	printf("mydeallocate() returning ptr (or NULL) to user thread\n\n");
+	printf("myallocate() returning ptr (or NULL) to user thread\n\n");
 	return metadata;
 	//return (void*)metadata + sizeof(block);
 }
@@ -898,30 +901,35 @@ int main(int argc, char* arv[]) {
 	printf("\n");
 	
 	printf("\n---------\n\n");
+	printf("\nUsing malloc");
+	int *i = (int*)malloc(sizeof(int));
+	printf("\nmalloc success");
+	*i = 10;
+	printf("\n%d", *i);
 
-	char func1_stack[16384];
-	char func2_stack[16384];
+	// char func1_stack[16384];
+	// char func2_stack[16384];
 
-	if (getcontext(&uctx_func1) == -1)
-		handle_error("getcontext");
-	uctx_func1.uc_stack.ss_sp = func1_stack;
-	uctx_func1.uc_stack.ss_size = sizeof(func1_stack);
-	uctx_func1.uc_link = &uctx_main;
-	makecontext(&uctx_func1, func1, 0);
+	// if (getcontext(&uctx_func1) == -1)
+	// 	handle_error("getcontext");
+	// uctx_func1.uc_stack.ss_sp = func1_stack;
+	// uctx_func1.uc_stack.ss_size = sizeof(func1_stack);
+	// uctx_func1.uc_link = &uctx_main;
+	// makecontext(&uctx_func1, func1, 0);
 
-	if (getcontext(&uctx_func2) == -1)
-		handle_error("getcontext");
-	uctx_func2.uc_stack.ss_sp = func2_stack;
-	uctx_func2.uc_stack.ss_size = sizeof(func2_stack);
-    /* Successor context is f1(), unless argc > 1 */
-	uctx_func2.uc_link = (argc > 1) ? NULL : &uctx_func1;
-	makecontext(&uctx_func2, func2, 0);
+	// if (getcontext(&uctx_func2) == -1)
+	// 	handle_error("getcontext");
+	// uctx_func2.uc_stack.ss_sp = func2_stack;
+	// uctx_func2.uc_stack.ss_size = sizeof(func2_stack);
+    // /* Successor context is f1(), unless argc > 1 */
+	// uctx_func2.uc_link = (argc > 1) ? NULL : &uctx_func1;
+	// makecontext(&uctx_func2, func2, 0);
 
-	printf("main: swapcontext(&uctx_main, &uctx_func2)\n\n");
+	// printf("main: swapcontext(&uctx_main, &uctx_func2)\n\n");
 
 
-	if (swapcontext(&uctx_main, &uctx_func2) == -1)
-		handle_error("swapcontext");
+	// if (swapcontext(&uctx_main, &uctx_func2) == -1)
+	// 	handle_error("swapcontext");
 
 
 	printf("main: exiting\n");
